@@ -1,9 +1,9 @@
 name: Build Rehan Chase APK
 
 on:
-  workflow_dispatch:
   push:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -13,28 +13,46 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Extract game ZIP
+        run: |
+          ZIP_FILE=$(find . -maxdepth 1 -type f -name "*.zip" | head -n 1)
+          if [ -z "$ZIP_FILE" ]; then
+            echo "No ZIP file found!"
+            exit 1
+          fi
+          echo "Extracting: $ZIP_FILE"
+          unzip -o "$ZIP_FILE" -d .
+
+      - name: Check project
+        run: |
+          echo "Project files:"
+          ls -la
+          test -f package.json || {
+            echo "package.json not found!"
+            exit 1
+          }
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-
+          node-version: 22
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build web game
         run: npm run build
 
       - name: Install Capacitor
-        run: npm install @capacitor/core @capacitor/cli @capacitor/android
+        run: npm install @capacitor/core@7.4.4 @capacitor/cli@7.4.4 @capacitor/android@7.4.4
 
-      - name: Create Capacitor config
+      - name: Initialize Capacitor
         run: |
-          if [ ! -f capacitor.config.ts ] && [ ! -f capacitor.config.json ]; then
+          if [ ! -f capacitor.config.json ] && [ ! -f capacitor.config.ts ]; then
             npx cap init "Rehan Chase" "com.rehanchase.game" --web-dir=dist
           fi
 
-      - name: Add Android
+      - name: Add Android platform
         run: |
           if [ ! -d android ]; then
             npx cap add android
@@ -43,9 +61,17 @@ jobs:
       - name: Sync Android
         run: npx cap sync android
 
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
       - name: Build APK
         working-directory: android
-        run: chmod +x gradlew && ./gradlew assembleDebug
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
